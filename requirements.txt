@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+langchain
+langchain-community
+langchain-openai
+pypdf
+python-docx
+pillow
+pytesseract
+python-multipart
+jinja2
