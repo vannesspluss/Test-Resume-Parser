@@ -1,4 +1,5 @@
 import os
+import signal
 from typing import List, Optional
 from pydantic import BaseModel, Field, EmailStr, constr, confloat
 from langchain.prompts import PromptTemplate
@@ -67,6 +68,7 @@ class Resume(BaseModel):
     certificates: Optional[List[Certificate]] = None
 
 
+# === Prompt ===
 resume_template = """
 You are an AI assistant tasked with extracting structured information from a resume.
 Extract as much relevant information as possible using the following schema.
@@ -81,6 +83,7 @@ parser = PydanticOutputParser(pydantic_object=Resume)
 prompt_template = PromptTemplate(template=resume_template, input_variables=["resume_text"])
 model = init_chat_model(model="gpt-4o-mini", model_provider="openai").with_structured_output(Resume)
 
+# === Extractors ===
 def extract_text_from_docx(file_path: str) -> str:
     doc = Document(file_path)
     return "\n".join([para.text for para in doc.paragraphs])
@@ -89,30 +92,38 @@ def extract_text_from_txt(file_path: str) -> str:
     with open(file_path, "r", encoding="utf-8") as f:
         return f.read()
 
+class TimeoutException(Exception): pass
+
+def timeout_handler(signum, frame):
+    raise TimeoutException()
+
 def extract_text_from_image(file_path: str) -> str:
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(10)  # 10-second timeout
     try:
         image = Image.open(file_path)
         return pytesseract.image_to_string(image)
+    except TimeoutException:
+        return "OCR timed out. Try a smaller or clearer image."
     except Exception as e:
-        raise RuntimeError(f"Failed to extract text from image: {str(e)}")
+        return f"OCR failed: {str(e)}"
+    finally:
+        signal.alarm(0)
 
 def extract_text(file_path: str) -> str:
-    try:
-        ext = os.path.splitext(file_path)[-1].lower()
-        if ext == ".pdf":
-            loader = PyPDFLoader(file_path)
-            docs = loader.load()
-            return "\n".join([doc.page_content for doc in docs])
-        elif ext == ".docx":
-            return extract_text_from_docx(file_path)
-        elif ext == ".txt":
-            return extract_text_from_txt(file_path)
-        elif ext in [".jpg", ".jpeg", ".png"]:
-            return extract_text_from_image(file_path)
-        else:
-            raise ValueError(f"Unsupported file format: {ext}")
-    except Exception as e:
-        raise RuntimeError(f"Failed to extract text: {str(e)}")
+    ext = os.path.splitext(file_path)[-1].lower()
+    if ext == ".pdf":
+        loader = PyPDFLoader(file_path)
+        docs = loader.load()
+        return "\n".join([doc.page_content for doc in docs])
+    elif ext == ".docx":
+        return extract_text_from_docx(file_path)
+    elif ext == ".txt":
+        return extract_text_from_txt(file_path)
+    elif ext in [".jpg", ".jpeg", ".png"]:
+        return extract_text_from_image(file_path)
+    else:
+        raise ValueError(f"Unsupported file format: {ext}")
 
 def parse_resume(file_path: str) -> Resume:
     resume_text = extract_text(file_path)

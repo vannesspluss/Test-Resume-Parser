@@ -102,6 +102,8 @@
       const file = fileInput.files[0];
       if (!file) return;
 
+      console.log("Uploading file:", file.name, file.type, file.size);
+
       const formData = new FormData();
       formData.append("file", file);
 
@@ -109,42 +111,28 @@
       output.classList.add("hidden");
       output.textContent = "";
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
-
-      output.textContent = "Waking up server or processing file... Please wait.";
-      output.classList.remove("hidden");
-
       try {
         const res = await fetch("https://test-resume-parser.onrender.com/upload/", {
           method: "POST",
-          body: formData,
-          signal: controller.signal,
+          body: formData
         });
 
-        clearTimeout(timeoutId);
-
-        let json;
-        try {
-          json = await res.json();
-        } catch (err) {
-          output.textContent = "Server returned an invalid response.";
-          loader.classList.add("hidden");
-          return;
-        }
+        console.log("Status:", res.status);
 
         if (!res.ok) {
-          output.textContent = "Error: " + (json?.error || "Unknown error occurred.");
-        } else {
-          output.textContent = formatOutput(json);
+          throw new Error(`Server error: ${res.status}`);
         }
 
+        const json = await res.json();
+        console.log("Response JSON:", json);
+
+        output.textContent = formatOutput(json.parsed);
+        output.classList.remove("hidden");
+
       } catch (err) {
-        if (err.name === "AbortError") {
-          output.textContent = "Request timed out. The server may be waking up. Please try again.";
-        } else {
-          output.textContent = "Network error. Please try again.";
-        }
+        console.error("Upload error:", err);
+        output.textContent = "Error uploading file. Check console for details.";
+        output.classList.remove("hidden");
       } finally {
         loader.classList.add("hidden");
       }
