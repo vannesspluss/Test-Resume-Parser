@@ -19,7 +19,7 @@ class PersonalInformation(BaseModel):
     birthDate: Optional[str] = None
     age: Optional[int] = Field(default=None, ge=0)
     gender: Optional[str] = Field(default=None, pattern="^(Male|Female|Other)$")
-    phone: constr(min_length=10, max_length=10)
+    phone: constr(min_length=10, max_length=12)
     email: EmailStr
     province: Optional[str] = None
     district: Optional[str] = None

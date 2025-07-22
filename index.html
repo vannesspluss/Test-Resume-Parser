@@ -109,18 +109,26 @@
       output.classList.add("hidden");
       output.textContent = "";
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
+      output.textContent = "Waking up server or processing file... Please wait.";
+      output.classList.remove("hidden");
+
       try {
         const res = await fetch("https://test-resume-parser.onrender.com/upload/", {
           method: "POST",
-          body: formData
+          body: formData,
+          signal: controller.signal,
         });
+
+        clearTimeout(timeoutId);
 
         let json;
         try {
           json = await res.json();
         } catch (err) {
           output.textContent = "Server returned an invalid response.";
-          output.classList.remove("hidden");
           loader.classList.add("hidden");
           return;
         }
@@ -131,10 +139,12 @@
           output.textContent = formatOutput(json);
         }
 
-        output.classList.remove("hidden");
       } catch (err) {
-        output.textContent = "Error uploading file. Please try again.";
-        output.classList.remove("hidden");
+        if (err.name === "AbortError") {
+          output.textContent = "Request timed out. The server may be waking up. Please try again.";
+        } else {
+          output.textContent = "Network error. Please try again.";
+        }
       } finally {
         loader.classList.add("hidden");
       }
