@@ -59,12 +59,13 @@ class Resume(BaseModel):
     availability: Optional[str] = None
     currentPosition: Optional[str] = None
     salary: Optional[Salary] = None
-    certificates: Optional[List[Certificate]] = None
+    qualification: Optional[List[Qualification]] = None
     softSkills: Optional[List[str]] = None
     technicalSkills: Optional[List[str]] = None
     experiences: Optional[List[Experience]] = None
     educations: Optional[List[Education]] = None
-    qualification: Optional[List[Qualification]] = None
+    certificates: Optional[List[Certificate]] = None
+
 
 resume_template = """
 You are an AI assistant tasked with extracting structured information from a resume.
