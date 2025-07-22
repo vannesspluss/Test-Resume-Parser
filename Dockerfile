@@ -1,22 +1,33 @@
-# Use an official Python base image
+# Use official Python image with reduced size
 FROM python:3.11-slim
 
-# Install system packages (incl. tesseract)
-RUN apt-get update && \
-    apt-get install -y tesseract-ocr libglib2.0-0 libsm6 libxext6 libxrender-dev && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-# Set work directory
+# Install dependencies (Tesseract + system libraries)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        tesseract-ocr \
+        libglib2.0-0 \
+        libsm6 \
+        libxext6 \
+        libxrender1 \
+        && apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set working directory
 WORKDIR /app
 
 # Copy project files
 COPY . .
 
-# Install Python dependencies
-RUN pip install --upgrade pip && pip install -r requirements.txt
+# Upgrade pip and install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Expose port
+# Expose port (Render expects 10000 by your setup)
 EXPOSE 10000
 
-# Start the server
+# Command to run the app
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]

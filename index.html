@@ -110,7 +110,7 @@
       output.textContent = "";
 
       try {
-        const res = await fetch("https://test-resume-parser.onrender.com/upload/", {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/upload/`, {
           method: "POST",
           body: formData
         });
