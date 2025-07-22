@@ -14,6 +14,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def root():
+    return {"status": "ok"}
+
 @app.post("/upload/")
 async def handle_upload(file: UploadFile = File(...)):
     temp_path = f"temp_{file.filename}"
