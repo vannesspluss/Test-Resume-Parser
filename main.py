@@ -23,6 +23,7 @@ async def handle_upload(file: UploadFile = File(...)):
     parsed, raw_text = parse_resume(temp_path)
 
     os.remove(temp_path)
+    print(raw_text)
 
     return {
         "parsed": parsed.model_dump(),

@@ -99,10 +99,11 @@ def timeout_handler(signum, frame):
 
 def extract_text_from_image(file_path: str) -> str:
     signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(10)  # 10-second timeout
+    signal.alarm(10)
     try:
-        image = Image.open(file_path)
-        return pytesseract.image_to_string(image)
+        image = Image.open(file_path).convert("L")
+        custom_config = "--oem 3 --psm 6 -l eng+tha"
+        return pytesseract.image_to_string(image, config=custom_config)
     except TimeoutException:
         return "OCR timed out. Try a smaller or clearer image."
     except Exception as e:
