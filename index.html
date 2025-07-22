@@ -115,8 +115,22 @@
           body: formData
         });
 
-        const json = await res.json();
-        output.textContent = formatOutput(json);
+        let json;
+        try {
+          json = await res.json();
+        } catch (err) {
+          output.textContent = "Server returned an invalid response.";
+          output.classList.remove("hidden");
+          loader.classList.add("hidden");
+          return;
+        }
+
+        if (!res.ok) {
+          output.textContent = "Error: " + (json?.error || "Unknown error occurred.");
+        } else {
+          output.textContent = formatOutput(json);
+        }
+
         output.classList.remove("hidden");
       } catch (err) {
         output.textContent = "Error uploading file. Please try again.";

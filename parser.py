@@ -90,23 +90,29 @@ def extract_text_from_txt(file_path: str) -> str:
         return f.read()
 
 def extract_text_from_image(file_path: str) -> str:
-    image = Image.open(file_path)
-    return pytesseract.image_to_string(image)
+    try:
+        image = Image.open(file_path)
+        return pytesseract.image_to_string(image)
+    except Exception as e:
+        raise RuntimeError(f"Failed to extract text from image: {str(e)}")
 
 def extract_text(file_path: str) -> str:
-    ext = os.path.splitext(file_path)[-1].lower()
-    if ext == ".pdf":
-        loader = PyPDFLoader(file_path)
-        docs = loader.load()
-        return "\n".join([doc.page_content for doc in docs])
-    elif ext == ".docx":
-        return extract_text_from_docx(file_path)
-    elif ext == ".txt":
-        return extract_text_from_txt(file_path)
-    elif ext in [".jpg", ".jpeg", ".png"]:
-        return extract_text_from_image(file_path)
-    else:
-        raise ValueError(f"Unsupported file format: {ext}")
+    try:
+        ext = os.path.splitext(file_path)[-1].lower()
+        if ext == ".pdf":
+            loader = PyPDFLoader(file_path)
+            docs = loader.load()
+            return "\n".join([doc.page_content for doc in docs])
+        elif ext == ".docx":
+            return extract_text_from_docx(file_path)
+        elif ext == ".txt":
+            return extract_text_from_txt(file_path)
+        elif ext in [".jpg", ".jpeg", ".png"]:
+            return extract_text_from_image(file_path)
+        else:
+            raise ValueError(f"Unsupported file format: {ext}")
+    except Exception as e:
+        raise RuntimeError(f"Failed to extract text: {str(e)}")
 
 def parse_resume(file_path: str) -> Resume:
     resume_text = extract_text(file_path)
