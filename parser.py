@@ -1,6 +1,7 @@
 import os
 import signal
 import io
+import hashlib
 from typing import List, Optional
 from pydantic import BaseModel, Field, EmailStr, constr, confloat
 from langchain.prompts import PromptTemplate
@@ -12,6 +13,7 @@ from PIL import Image
 import pytesseract
 
 api_key = os.environ.get("OPENAI_API_KEY")
+ocr_cache = {}
 
 class PersonalInformation(BaseModel):
     firstNameEN: str
@@ -110,6 +112,11 @@ def compress_image_to_under_100kb(image: Image.Image) -> Image.Image:
         quality -= 5
     raise Exception("Cannot compress image under 100 KB without losing quality.")
 
+def get_image_hash(image: Image.Image) -> str:
+    buffer = io.BytesIO()
+    image.save(buffer, format='PNG')
+    return hashlib.sha256(buffer.getvalue()).hexdigest()
+
 def extract_text_from_image(file_path: str) -> str:
     signal.signal(signal.SIGALRM, timeout_handler)
     signal.alarm(180)  # 3-minute timeout
@@ -128,6 +135,10 @@ def extract_text_from_image(file_path: str) -> str:
             image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
         image = image.point(lambda x: 0 if x < 140 else 255, '1')
+
+        image_hash = get_image_hash(image)
+        if image_hash in ocr_cache:
+            return ocr_cache[image_hash]
 
         image = compress_image_to_under_100kb(image)
 
