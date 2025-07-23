@@ -99,9 +99,18 @@ def timeout_handler(signum, frame):
 
 def extract_text_from_image(file_path: str) -> str:
     signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(10)
+    signal.alarm(60)
     try:
         image = Image.open(file_path).convert("L")
+
+        MAX_WIDTH = 2000
+        if image.width > MAX_WIDTH:
+            ratio = MAX_WIDTH / float(image.width)
+            height = int((float(image.height) * float(ratio)))
+            image = image.resize((MAX_WIDTH, height), Image.ANTIALIAS)
+        
+        image = image.point(lambda x: 0 if x < 140 else 255, '1')
+        
         custom_config = "--oem 3 --psm 6 -l eng+tha"
         return pytesseract.image_to_string(image, config=custom_config)
     except TimeoutException:
