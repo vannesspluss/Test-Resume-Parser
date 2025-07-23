@@ -119,12 +119,12 @@ def get_image_hash(image: Image.Image) -> str:
 
 def extract_text_from_image(file_path: str) -> str:
     signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(180)  # 3-minute timeout
+    signal.alarm(180)
+
     try:
         image = Image.open(file_path).convert("L")
 
-        MAX_WIDTH = 250
-        MAX_HEIGHT = 300
+        MAX_WIDTH, MAX_HEIGHT = 250, 300
         width_ratio = MAX_WIDTH / image.width
         height_ratio = MAX_HEIGHT / image.height
         scale_ratio = min(width_ratio, height_ratio)
@@ -143,7 +143,10 @@ def extract_text_from_image(file_path: str) -> str:
         image = compress_image_to_under_100kb(image)
 
         custom_config = "--oem 3 --psm 6 -l eng+tha"
-        return pytesseract.image_to_string(image, config=custom_config)
+        text = pytesseract.image_to_string(image, config=custom_config)
+
+        ocr_cache[image_hash] = text
+        return text
 
     except TimeoutException:
         return "OCR timed out. Try a smaller or clearer image."
