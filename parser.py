@@ -1,5 +1,6 @@
 import os
 import signal
+import io
 from typing import List, Optional
 from pydantic import BaseModel, Field, EmailStr, constr, confloat
 from langchain.prompts import PromptTemplate
@@ -96,6 +97,18 @@ class TimeoutException(Exception): pass
 
 def timeout_handler(signum, frame):
     raise TimeoutException()
+
+def compress_image_to_under_100kb(image: Image.Image) -> Image.Image:
+    quality = 85
+    while quality > 10:
+        buffer = io.BytesIO()
+        image.save(buffer, format='JPEG', quality=quality, optimize=True)
+        size_kb = buffer.tell() / 1024
+        if size_kb <= 100:
+            buffer.seek(0)
+            return Image.open(buffer)
+        quality -= 5
+    raise Exception("Cannot compress image under 100 KB without losing quality.")
 
 def extract_text_from_image(file_path: str) -> str:
     signal.signal(signal.SIGALRM, timeout_handler)
