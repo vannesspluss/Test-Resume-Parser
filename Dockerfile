@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zlib1g-dev \
     libpng-dev \
     fonts-thai-tlwg \
-    ttf-dejavu \
+    fonts-dejavu \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
