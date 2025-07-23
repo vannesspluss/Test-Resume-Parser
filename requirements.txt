@@ -9,6 +9,6 @@ pillow
 pytesseract
 python-multipart
 email-validator
-paddleocr
-paddlepaddle==2.5.2
+paddleocr==3.1.0
+paddlepaddle==3.1.0
 jinja2
