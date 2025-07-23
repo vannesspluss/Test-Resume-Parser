@@ -125,7 +125,7 @@ def extract_text_from_image(file_path: str) -> str:
         if scale_ratio < 1.0:
             new_width = int(image.width * scale_ratio)
             new_height = int(image.height * scale_ratio)
-            image = image.resize((new_width, new_height), Image.ANTIALIAS)
+            image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
         image = image.point(lambda x: 0 if x < 140 else 255, '1')
 
