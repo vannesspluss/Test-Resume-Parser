@@ -97,9 +97,30 @@ class TimeoutException(Exception): pass
 def timeout_handler(signum, frame):
     raise TimeoutException()
 
+# def extract_text_from_image(file_path: str) -> str:
+#     signal.signal(signal.SIGALRM, timeout_handler)
+#     signal.alarm(60)
+#     try:
+#         image = Image.open(file_path).convert("L")
+
+#         MAX_WIDTH = 2000
+#         if image.width > MAX_WIDTH:
+#             ratio = MAX_WIDTH / float(image.width)
+#             height = int((float(image.height) * float(ratio)))
+#             image = image.resize((MAX_WIDTH, height), Image.ANTIALIAS)
+        
+#         image = image.point(lambda x: 0 if x < 140 else 255, '1')
+        
+#         custom_config = "--oem 3 --psm 6 -l eng+tha"
+#         return pytesseract.image_to_string(image, config=custom_config)
+#     except TimeoutException:
+#         return "OCR timed out. Try a smaller or clearer image."
+#     except Exception as e:
+#         return f"OCR failed: {str(e)}"
+#     finally:
+#         signal.alarm(0)
+
 def extract_text_from_image(file_path: str) -> str:
-    signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(60)
     try:
         image = Image.open(file_path).convert("L")
 
@@ -113,12 +134,8 @@ def extract_text_from_image(file_path: str) -> str:
         
         custom_config = "--oem 3 --psm 6 -l eng+tha"
         return pytesseract.image_to_string(image, config=custom_config)
-    except TimeoutException:
-        return "OCR timed out. Try a smaller or clearer image."
     except Exception as e:
-        return f"OCR failed: {str(e)}"
-    finally:
-        signal.alarm(0)
+        raise RuntimeError(f"Failed to extract text from image: {str(e)}")
 
 def extract_text(file_path: str) -> str:
     ext = os.path.splitext(file_path)[-1].lower()
