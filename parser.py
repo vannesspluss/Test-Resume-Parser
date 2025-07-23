@@ -112,41 +112,39 @@ def compress_image_to_under_100kb(image: Image.Image) -> Image.Image:
         quality -= 5
     raise Exception("Cannot compress image under 100 KB without losing quality.")
 
-def get_image_hash(image: Image.Image) -> str:
-    buffer = io.BytesIO()
-    image.save(buffer, format='PNG')
-    return hashlib.sha256(buffer.getvalue()).hexdigest()
+def get_image_hash_from_file(file_path: str) -> str:
+    with open(file_path, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
 
 def extract_text_from_image(file_path: str) -> str:
-    signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(180)
-
     try:
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(180)
+
+        image_hash = get_image_hash_from_file(file_path)
+
+        if image_hash in ocr_cache:
+            return f"[CACHE HIT]\n{ocr_cache[image_hash]}"
+
         image = Image.open(file_path).convert("L")
 
         MAX_WIDTH, MAX_HEIGHT = 250, 300
         width_ratio = MAX_WIDTH / image.width
         height_ratio = MAX_HEIGHT / image.height
         scale_ratio = min(width_ratio, height_ratio)
-
         if scale_ratio < 1.0:
-            new_width = int(image.width * scale_ratio)
-            new_height = int(image.height * scale_ratio)
-            image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            new_size = (int(image.width * scale_ratio), int(image.height * scale_ratio))
+            image = image.resize(new_size, Image.Resampling.LANCZOS)
 
         image = image.point(lambda x: 0 if x < 140 else 255, '1')
 
-        image_hash = get_image_hash(image)
-        if image_hash in ocr_cache:
-            return ocr_cache[image_hash]
-
         image = compress_image_to_under_100kb(image)
 
-        custom_config = "--oem 3 --psm 6 -l eng+tha"
-        text = pytesseract.image_to_string(image, config=custom_config)
+        config = "--oem 3 --psm 6 -l eng+tha"
+        text = pytesseract.image_to_string(image, config=config)
 
         ocr_cache[image_hash] = text
-        return text
+        return f"[OCR DONE]\n{text}"
 
     except TimeoutException:
         return "OCR timed out. Try a smaller or clearer image."
