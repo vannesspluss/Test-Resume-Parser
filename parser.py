@@ -112,20 +112,28 @@ def compress_image_to_under_100kb(image: Image.Image) -> Image.Image:
 
 def extract_text_from_image(file_path: str) -> str:
     signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(180)
+    signal.alarm(180)  # 3-minute timeout
     try:
         image = Image.open(file_path).convert("L")
 
-        MAX_WIDTH = 2000
-        if image.width > MAX_WIDTH:
-            ratio = MAX_WIDTH / float(image.width)
-            height = int((float(image.height) * float(ratio)))
-            image = image.resize((MAX_WIDTH, height), Image.ANTIALIAS)
-        
+        MAX_WIDTH = 250
+        MAX_HEIGHT = 300
+        width_ratio = MAX_WIDTH / image.width
+        height_ratio = MAX_HEIGHT / image.height
+        scale_ratio = min(width_ratio, height_ratio)
+
+        if scale_ratio < 1.0:
+            new_width = int(image.width * scale_ratio)
+            new_height = int(image.height * scale_ratio)
+            image = image.resize((new_width, new_height), Image.ANTIALIAS)
+
         image = image.point(lambda x: 0 if x < 140 else 255, '1')
-        
+
+        image = compress_image_to_under_100kb(image)
+
         custom_config = "--oem 3 --psm 6 -l eng+tha"
         return pytesseract.image_to_string(image, config=custom_config)
+
     except TimeoutException:
         return "OCR timed out. Try a smaller or clearer image."
     except Exception as e:
