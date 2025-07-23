@@ -144,6 +144,7 @@ def extract_text_from_image(file_path: str) -> str:
         text = pytesseract.image_to_string(image, config=config)
 
         ocr_cache[image_hash] = text
+        print("OCR Extracted Text:", text)
         return f"[OCR DONE]\n{text}"
 
     except TimeoutException:
