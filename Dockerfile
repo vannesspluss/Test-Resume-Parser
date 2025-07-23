@@ -14,6 +14,11 @@ RUN apt-get update && \
         libsm6 \
         libxext6 \
         libxrender1 \
+        libjpeg-dev \
+        zlib1g-dev \
+        libpng-dev \
+        fonts-thai-tlwg \
+        ttf-dejavu \
         && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

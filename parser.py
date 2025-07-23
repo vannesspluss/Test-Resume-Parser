@@ -148,13 +148,16 @@ def extract_text_from_image(file_path: str) -> str:
     try:
         image = Image.open(file_path).convert("L")
 
-        MAX_WIDTH = 250
+        MAX_WIDTH = 300
         if image.width > MAX_WIDTH:
             ratio = MAX_WIDTH / float(image.width)
             height = int((float(image.height) * float(ratio)))
             image = image.resize((MAX_WIDTH, height), Image.Resampling.LANCZOS)
         
         image = image.point(lambda x: 0 if x < 140 else 255, '1')
+
+        if os.path.getsize(file_path) > 100 * 1024:
+            image = compress_image_to_under_100kb(image)
         
         custom_config = "--oem 3 --psm 6 -l eng+tha"
         return pytesseract.image_to_string(image, config=custom_config)
