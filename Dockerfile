@@ -1,4 +1,4 @@
-# Use official Python image with reduced size
+# Use official slim Python base
 FROM python:3.11-slim
 
 # Set environment variables
@@ -14,12 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gnupg \
     lsb-release \
     software-properties-common \
-    locales && \
-    echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
-    locale-gen
-
-# Add Tesseract dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+    locales \
     tesseract-ocr \
     tesseract-ocr-tha \
     libglib2.0-0 \
@@ -30,8 +25,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zlib1g-dev \
     libpng-dev \
     fonts-thai-tlwg \
-    fonts-dejavu \
-    && apt-get clean && \
+    fonts-dejavu-core \
+    && echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
+    locale-gen && \
+    apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -44,8 +41,8 @@ COPY . .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Expose port for Render
+# Expose the port
 EXPOSE 10000
 
-# Start the FastAPI app
+# Start FastAPI
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]

@@ -1,6 +1,7 @@
 import os
 import signal
 import io
+import pytesseract
 from typing import List, Optional
 from pydantic import BaseModel, Field, EmailStr, constr, confloat
 from langchain.prompts import PromptTemplate
@@ -9,7 +10,7 @@ from langchain.chat_models import init_chat_model
 from langchain_community.document_loaders import PyPDFLoader
 from docx import Document
 from PIL import Image
-import pytesseract
+from paddleocr import PaddleOCR
 
 api_key = os.environ.get("OPENAI_API_KEY")
 
@@ -141,10 +142,6 @@ def compress_image_to_under_100kb(image: Image.Image) -> Image.Image:
 #         return f"OCR failed: {str(e)}"
 #     finally:
 #         signal.alarm(0)
-MAX_TOKENS = 700  # ~3000 chars
-
-def truncate_text(text: str, max_tokens: int = MAX_TOKENS) -> str:
-    return text[:max_tokens * 4]
 
 # def extract_text_from_image(file_path: str) -> str:
 #     signal.signal(signal.SIGALRM, timeout_handler)
@@ -172,36 +169,22 @@ def truncate_text(text: str, max_tokens: int = MAX_TOKENS) -> str:
 #     finally:
 #         signal.alarm(0)
 
+ocr_model = PaddleOCR(use_angle_cls=True, lang='en')  # Use lang='en' for English only, or 'en' + 'th' for Thai+English
+
 def extract_text_from_image(file_path: str) -> str:
-    signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(180)
     try:
-        image = Image.open(file_path)
+        ocr = PaddleOCR(use_angle_cls=True, lang='en')  # 'en' includes Thai by default
+        result = ocr.ocr(file_path, cls=True)
 
-        # Convert to grayscale and apply binary threshold
-        gray = image.convert("L")
-        binary = gray.point(lambda x: 0 if x < 140 else 255, "1")
+        lines = []
+        for block in result:
+            for line in block:
+                text = line[1][0]
+                lines.append(text)
 
-        # Resize (upscale small images)
-        if binary.width < 800:
-            scale_factor = 800 / binary.width
-            new_size = (800, int(binary.height * scale_factor))
-            binary = binary.resize(new_size, Image.Resampling.LANCZOS)
-
-        # Optional: compress if needed
-        if os.path.getsize(file_path) > 100 * 1024:
-            binary = compress_image_to_under_100kb(binary)
-
-        # OCR
-        custom_config = "--oem 3 --psm 6 -l eng+tha"
-        return pytesseract.image_to_string(binary, config=custom_config)
-
-    except TimeoutException:
-        return "OCR timed out. Try a smaller or clearer image."
+        return "\n".join(lines)
     except Exception as e:
-        return f"OCR failed: {str(e)}"
-    finally:
-        signal.alarm(0)
+        return f"PaddleOCR failed: {str(e)}"
 
 def extract_text(file_path: str) -> str:
     ext = os.path.splitext(file_path)[-1].lower()
@@ -220,7 +203,7 @@ def extract_text(file_path: str) -> str:
 
 def parse_resume(file_path: str) -> Resume:
     resume_text = extract_text(file_path)
-    resume_text = truncate_text(resume_text)
     prompt = prompt_template.invoke({"resume_text": resume_text})
     result = model.invoke(prompt)
+    # result = model.invoke(prompt, config={"max_tokens": 500})
     return result, resume_text
