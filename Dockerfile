@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg-dev \
     zlib1g-dev \
     libpng-dev \
+    libgl1 \
     fonts-thai-tlwg \
     fonts-dejavu-core \
     && echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
