@@ -1,7 +1,6 @@
 import os
 import signal
 import io
-import hashlib
 from typing import List, Optional
 from pydantic import BaseModel, Field, EmailStr, constr, confloat
 from langchain.prompts import PromptTemplate
@@ -13,7 +12,6 @@ from PIL import Image
 import pytesseract
 
 api_key = os.environ.get("OPENAI_API_KEY")
-ocr_cache = {}
 
 class PersonalInformation(BaseModel):
     firstNameEN: str
@@ -112,41 +110,30 @@ def compress_image_to_under_100kb(image: Image.Image) -> Image.Image:
         quality -= 5
     raise Exception("Cannot compress image under 100 KB without losing quality.")
 
-def get_image_hash_from_file(file_path: str) -> str:
-    with open(file_path, "rb") as f:
-        return hashlib.sha256(f.read()).hexdigest()
-
 def extract_text_from_image(file_path: str) -> str:
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(180)
     try:
-        signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(180)
-
-        image_hash = get_image_hash_from_file(file_path)
-
-        if image_hash in ocr_cache:
-            return f"[CACHE HIT]\n{ocr_cache[image_hash]}"
-
         image = Image.open(file_path).convert("L")
 
-        MAX_WIDTH, MAX_HEIGHT = 250, 300
-        width_ratio = MAX_WIDTH / image.width
-        height_ratio = MAX_HEIGHT / image.height
+        MAX_WIDTH = 250
+        MAX_HEIGHT = 300
+        width_ratio = MAX_WIDTH / float(image.width)
+        height_ratio = MAX_HEIGHT / float(image.height)
         scale_ratio = min(width_ratio, height_ratio)
+
         if scale_ratio < 1.0:
-            new_size = (int(image.width * scale_ratio), int(image.height * scale_ratio))
-            image = image.resize(new_size, Image.Resampling.LANCZOS)
+            new_width = int(float(image.width) * scale_ratio)
+            new_height = int(float(image.height) * scale_ratio)
+            image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
         image = image.point(lambda x: 0 if x < 140 else 255, '1')
 
         if os.path.getsize(file_path) > 100 * 1024:
             image = compress_image_to_under_100kb(image)
 
-        config = "--oem 3 --psm 6 -l eng+tha"
-        text = pytesseract.image_to_string(image, config=config)
-
-        ocr_cache[image_hash] = text
-        print("OCR Extracted Text:", text)
-        return f"[OCR DONE]\n{text}"
+        custom_config = "--oem 3 --psm 6 -l eng+tha"
+        return pytesseract.image_to_string(image, config=custom_config)
 
     except TimeoutException:
         return "OCR timed out. Try a smaller or clearer image."
@@ -172,11 +159,6 @@ def extract_text(file_path: str) -> str:
 
 def parse_resume(file_path: str) -> Resume:
     resume_text = extract_text(file_path)
-
-    # CLEAN OCR header --> fix image parser
-    if resume_text.startswith("[OCR DONE]") or resume_text.startswith("[CACHE HIT]"):
-        resume_text = resume_text.split("]", 1)[-1].strip()
-    
     prompt = prompt_template.invoke({"resume_text": resume_text})
     result = model.invoke(prompt)
     return result, resume_text
