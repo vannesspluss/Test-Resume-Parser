@@ -141,26 +141,61 @@ def compress_image_to_under_100kb(image: Image.Image) -> Image.Image:
 #         return f"OCR failed: {str(e)}"
 #     finally:
 #         signal.alarm(0)
+MAX_TOKENS = 700  # ~3000 chars
+
+def truncate_text(text: str, max_tokens: int = MAX_TOKENS) -> str:
+    return text[:max_tokens * 4]
+
+# def extract_text_from_image(file_path: str) -> str:
+#     signal.signal(signal.SIGALRM, timeout_handler)
+#     signal.alarm(180)
+#     try:
+#         image = Image.open(file_path).convert("L")
+
+#         MAX_WIDTH = 300
+#         if image.width > MAX_WIDTH:
+#             ratio = MAX_WIDTH / float(image.width)
+#             height = int((float(image.height) * float(ratio)))
+#             image = image.resize((MAX_WIDTH, height), Image.Resampling.LANCZOS)
+        
+#         image = image.point(lambda x: 0 if x < 140 else 255, '1')
+
+#         if os.path.getsize(file_path) > 100 * 1024:
+#             image = compress_image_to_under_100kb(image)
+        
+#         custom_config = "--oem 3 --psm 6 -l eng+tha"
+#         return pytesseract.image_to_string(image, config=custom_config)
+#     except TimeoutException:
+#         return "OCR timed out. Try a smaller or clearer image."
+#     except Exception as e:
+#         return f"OCR failed: {str(e)}"
+#     finally:
+#         signal.alarm(0)
 
 def extract_text_from_image(file_path: str) -> str:
     signal.signal(signal.SIGALRM, timeout_handler)
     signal.alarm(180)
     try:
-        image = Image.open(file_path).convert("L")
+        image = Image.open(file_path)
 
-        MAX_WIDTH = 300
-        if image.width > MAX_WIDTH:
-            ratio = MAX_WIDTH / float(image.width)
-            height = int((float(image.height) * float(ratio)))
-            image = image.resize((MAX_WIDTH, height), Image.Resampling.LANCZOS)
-        
-        image = image.point(lambda x: 0 if x < 140 else 255, '1')
+        # Convert to grayscale and apply binary threshold
+        gray = image.convert("L")
+        binary = gray.point(lambda x: 0 if x < 140 else 255, "1")
 
+        # Resize (upscale small images)
+        if binary.width < 800:
+            scale_factor = 800 / binary.width
+            new_size = (800, int(binary.height * scale_factor))
+            binary = binary.resize(new_size, Image.Resampling.LANCZOS)
+
+        # Optional: compress if needed
         if os.path.getsize(file_path) > 100 * 1024:
-            image = compress_image_to_under_100kb(image)
-        
+            binary = compress_image_to_under_100kb(binary)
+
+        # OCR
         custom_config = "--oem 3 --psm 6 -l eng+tha"
-        return pytesseract.image_to_string(image, config=custom_config)
+        return pytesseract.image_to_string(binary, config=custom_config)
+
     except TimeoutException:
         return "OCR timed out. Try a smaller or clearer image."
     except Exception as e:
@@ -185,6 +220,7 @@ def extract_text(file_path: str) -> str:
 
 def parse_resume(file_path: str) -> Resume:
     resume_text = extract_text(file_path)
+    resume_text = truncate_text(resume_text)
     prompt = prompt_template.invoke({"resume_text": resume_text})
     result = model.invoke(prompt)
     return result, resume_text
