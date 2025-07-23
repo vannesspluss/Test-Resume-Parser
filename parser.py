@@ -138,7 +138,8 @@ def extract_text_from_image(file_path: str) -> str:
 
         image = image.point(lambda x: 0 if x < 140 else 255, '1')
 
-        image = compress_image_to_under_100kb(image)
+        if os.path.getsize(file_path) > 100 * 1024:
+            image = compress_image_to_under_100kb(image)
 
         config = "--oem 3 --psm 6 -l eng+tha"
         text = pytesseract.image_to_string(image, config=config)
@@ -171,6 +172,11 @@ def extract_text(file_path: str) -> str:
 
 def parse_resume(file_path: str) -> Resume:
     resume_text = extract_text(file_path)
+
+    # CLEAN OCR header --> fix image parser
+    if resume_text.startswith("[OCR DONE]") or resume_text.startswith("[CACHE HIT]"):
+        resume_text = resume_text.split("]", 1)[-1].strip()
+    
     prompt = prompt_template.invoke({"resume_text": resume_text})
     result = model.invoke(prompt)
     return result, resume_text
