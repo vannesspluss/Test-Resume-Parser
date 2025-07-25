@@ -173,10 +173,10 @@ def smart_resize_image(path: str):
 
         if height > width:
             # Portrait: resize only if height > 1200
-            if height <= 1200:
+            if height <= 1000:
                 print(f"[Resize] No resizing needed (height={height} <= 1200)")
                 return
-            new_height = 1200
+            new_height = 1000
             scale_factor = new_height / height
             new_width = int(width * scale_factor)
         else:
