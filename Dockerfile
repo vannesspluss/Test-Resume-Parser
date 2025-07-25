@@ -8,7 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     LANG=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8
 
-# Install only required system dependencies
+# Install only required system dependencies and setup locale
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     tesseract-ocr-tha \
@@ -23,10 +23,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     fonts-thai-tlwg \
     fonts-dejavu-core \
-    && echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
-    && locale-gen \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    locales && \
+    echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
+    locale-gen && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
@@ -34,7 +35,7 @@ WORKDIR /app
 # Copy project files
 COPY . .
 
-# Install Python dependencies
+# Upgrade pip and install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
