@@ -124,46 +124,53 @@ def extract_easyocr_text(file_path: str):
     print(f"[EasyOCR] Extracted {len(results)} elements with average confidence: {avg_conf:.2f}")
     return text, avg_conf
 
-def extract_tesseract_text(file_path: str, timeout=180):
-    print(f"[Tesseract] Running Tesseract on image: {file_path}")
-    signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(timeout)
-    try:
-        image = Image.open(file_path)
-        custom_config = "--oem 3 --psm 6 -l eng"
-        text = pytesseract.image_to_string(image, config=custom_config)
-        print(f"[Tesseract] Extracted {len(text)} characters.")
-        return text.strip()
-    except Exception as e:
-        print(f"[Tesseract] Error: {e}")
-        return ""
-    finally:
-        signal.alarm(0)
+# def extract_tesseract_text(file_path: str, timeout=180):
+#     print(f"[Tesseract] Running Tesseract on image: {file_path}")
+#     signal.signal(signal.SIGALRM, timeout_handler)
+#     signal.alarm(timeout)
+#     try:
+#         image = Image.open(file_path)
+#         custom_config = "--oem 3 --psm 6 -l eng"
+#         text = pytesseract.image_to_string(image, config=custom_config)
+#         print(f"[Tesseract] Extracted {len(text)} characters.")
+#         return text.strip()
+#     except Exception as e:
+#         print(f"[Tesseract] Error: {e}")
+#         return ""
+#     finally:
+#         signal.alarm(0)
 
-def contains_thai(text: str) -> bool:
-    return bool(re.search(r'[\u0E00-\u0E7F]', text))
+# def contains_thai(text: str) -> bool:
+#     return bool(re.search(r'[\u0E00-\u0E7F]', text))
 
-def count_valid_words(text: str) -> int:
-    words = re.findall(r'\b\w+\b', text)
-    return len(words)
+# def count_valid_words(text: str) -> int:
+#     words = re.findall(r'\b\w+\b', text)
+#     return len(words)
+
+# def extract_text_from_image(file_path: str) -> str:
+#     print(f"[Image] Starting OCR pipeline for: {file_path}")
+#     easy_text, easy_conf = extract_easyocr_text(file_path)
+
+#     if contains_thai(easy_text):
+#         print("[Image] Thai text detected in EasyOCR output. Using EasyOCR result.")
+#         return easy_text
+
+#     tesseract_text = extract_tesseract_text(file_path)
+#     easy_count = count_valid_words(easy_text)
+#     tess_count = count_valid_words(tesseract_text)
+
+#     print(f"[Image] Word count — EasyOCR: {easy_count}, Tesseract: {tess_count}")
+#     chosen = "Tesseract" if tess_count > easy_count else "EasyOCR"
+#     print(f"[Image] Using {chosen} result.")
+    
+#     return tesseract_text if tess_count > easy_count else easy_text
 
 def extract_text_from_image(file_path: str) -> str:
-    print(f"[Image] Starting OCR pipeline for: {file_path}")
-    easy_text, easy_conf = extract_easyocr_text(file_path)
+    print(f"[Image] Running EasyOCR on image: {file_path}")
+    text, confidence = extract_easyocr_text(file_path)
+    print(f"[Image] Using EasyOCR result with confidence: {confidence:.2f}")
+    return text
 
-    if contains_thai(easy_text):
-        print("[Image] Thai text detected in EasyOCR output. Using EasyOCR result.")
-        return easy_text
-
-    tesseract_text = extract_tesseract_text(file_path)
-    easy_count = count_valid_words(easy_text)
-    tess_count = count_valid_words(tesseract_text)
-
-    print(f"[Image] Word count — EasyOCR: {easy_count}, Tesseract: {tess_count}")
-    chosen = "Tesseract" if tess_count > easy_count else "EasyOCR"
-    print(f"[Image] Using {chosen} result.")
-    
-    return tesseract_text if tess_count > easy_count else easy_text
 
 def extract_text(file_path: str) -> str:
     ext = os.path.splitext(file_path)[-1].lower()
