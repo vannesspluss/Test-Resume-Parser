@@ -4,19 +4,15 @@ FROM python:3.11-slim
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    DEBIAN_FRONTEND=noninteractive
+    DEBIAN_FRONTEND=noninteractive \
+    LANG=en_US.UTF-8 \
+    LC_ALL=en_US.UTF-8
 
-# Install system dependencies
+# Install only required system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    wget \
-    curl \
-    gnupg \
-    lsb-release \
-    software-properties-common \
-    locales \
     tesseract-ocr \
     tesseract-ocr-tha \
+    poppler-utils \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
@@ -27,10 +23,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     fonts-thai-tlwg \
     fonts-dejavu-core \
-    && echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
-    locale-gen && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    && echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
+    && locale-gen \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
@@ -42,8 +38,8 @@ COPY . .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Expose the port
+# Expose FastAPI port
 EXPOSE 10000
 
-# Start FastAPI
+# Start FastAPI server
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]

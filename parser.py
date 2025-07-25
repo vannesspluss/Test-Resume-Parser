@@ -1,54 +1,54 @@
 import os
+import re
 import signal
-import io
-import pytesseract
 from typing import List, Optional
 from pydantic import BaseModel, Field, EmailStr, constr, confloat
+
+import pytesseract
+import easyocr
+from PIL import Image
+from docx import Document
 from langchain.prompts import PromptTemplate
 from langchain.output_parsers import PydanticOutputParser
 from langchain.chat_models import init_chat_model
 from langchain_community.document_loaders import PyPDFLoader
-from docx import Document
-from PIL import Image
-from paddleocr import PaddleOCR
 
-api_key = os.environ.get("OPENAI_API_KEY")
-
+# Pydantic Models
 class PersonalInformation(BaseModel):
     firstNameEN: str
     lastNameEN: str
     firstNameTH: str
     lastNameTH: str
-    birthDate: Optional[str] = None
-    age: Optional[int] = Field(default=None, ge=0)
+    birthDate: Optional[str]
+    age: Optional[int]
     gender: Optional[str] = Field(default=None, pattern="^(Male|Female|Other)$")
     phone: constr(min_length=10, max_length=12)
     email: EmailStr
-    province: Optional[str] = None
-    district: Optional[str] = None
+    province: Optional[str]
+    district: Optional[str]
 
 class Salary(BaseModel):
-    lastedSalary: Optional[confloat(ge=0)] = None
-    expectSalary: Optional[confloat(ge=0)] = None
+    lastedSalary: Optional[confloat(ge=0)]
+    expectSalary: Optional[confloat(ge=0)]
 
 class Qualification(BaseModel):
-    industry: Optional[str] = None
-    experiencesYear: Optional[int] = Field(default=None, ge=0)
-    majorSkill: Optional[str] = None
-    minorSkill: Optional[str] = None
+    industry: Optional[str]
+    experiencesYear: Optional[int]
+    majorSkill: Optional[str]
+    minorSkill: Optional[str]
 
 class Certificate(BaseModel):
-    course: Optional[str] = None
-    year: Optional[str] = None
-    institute: Optional[str] = None
+    course: Optional[str]
+    year: Optional[str]
+    institute: Optional[str]
 
 class Experience(BaseModel):
-    company: Optional[str] = None
-    position: Optional[str] = None
-    project: Optional[str] = None
-    startDate: Optional[str] = None
-    endDate: Optional[str] = None
-    responsibility: Optional[str] = None
+    company: Optional[str]
+    position: Optional[str]
+    project: Optional[str]
+    startDate: Optional[str]
+    endDate: Optional[str]
+    responsibility: Optional[str]
 
 class Education(BaseModel):
     degreeLevel: str
@@ -58,34 +58,44 @@ class Education(BaseModel):
     university: str
 
 class Resume(BaseModel):
-    personalInformation: Optional[PersonalInformation] = None
-    availability: Optional[str] = None
-    currentPosition: Optional[str] = None
-    salary: Optional[Salary] = None
-    qualification: Optional[List[Qualification]] = None
-    softSkills: Optional[List[str]] = None
-    technicalSkills: Optional[List[str]] = None
-    experiences: Optional[List[Experience]] = None
-    educations: Optional[List[Education]] = None
-    certificates: Optional[List[Certificate]] = None
+    personalInformation: Optional[PersonalInformation]
+    availability: Optional[str]
+    currentPosition: Optional[str]
+    salary: Optional[Salary]
+    qualification: Optional[List[Qualification]]
+    softSkills: Optional[List[str]]
+    technicalSkills: Optional[List[str]]
+    experiences: Optional[List[Experience]]
+    educations: Optional[List[Education]]
+    certificates: Optional[List[Certificate]]
 
-
-# === Prompt ===
 resume_template = """
-You are an AI assistant tasked with extracting structured information from a resume.
-Extract as much relevant information as possible using the following schema.
-
-Only return the output in the following JSON format for the Resume class.
+You are an AI assistant tasked with extracting structured information from a technical resume.
+Only extract the information that is present in the Resume class.
 
 Resume Detail:
 {resume_text}
 """
 
 parser = PydanticOutputParser(pydantic_object=Resume)
-prompt_template = PromptTemplate(template=resume_template, input_variables=["resume_text"])
-model = init_chat_model(model="gpt-4o-mini", model_provider="openai").with_structured_output(Resume)
+prompt_template = PromptTemplate(
+    template=resume_template,
+    input_variables=['resume_text']
+)
 
-# === Extractors ===
+model = init_chat_model(model='gpt-4o-mini', model_provider='openai').with_structured_output(Resume)
+
+# OCR and File Extraction
+class TimeoutException(Exception): pass
+
+def timeout_handler(signum, frame):
+    raise TimeoutException()
+
+def extract_text_from_pdf(file_path: str) -> str:
+    loader = PyPDFLoader(file_path)
+    docs = loader.load()
+    return "\n".join([doc.page_content for doc in docs])
+
 def extract_text_from_docx(file_path: str) -> str:
     doc = Document(file_path)
     return "\n".join([para.text for para in doc.paragraphs])
@@ -94,104 +104,44 @@ def extract_text_from_txt(file_path: str) -> str:
     with open(file_path, "r", encoding="utf-8") as f:
         return f.read()
 
-class TimeoutException(Exception): pass
+def extract_easyocr_text(file_path: str):
+    reader = easyocr.Reader(['en', 'th'], gpu=False)
+    results = reader.readtext(file_path)
+    text = " ".join([res[1] for res in results])
+    avg_conf = sum([res[2] for res in results]) / len(results) if results else 0
+    return text, avg_conf
 
-def timeout_handler(signum, frame):
-    raise TimeoutException()
+def extract_tesseract_text(file_path: str, timeout=180):
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(timeout)
+    try:
+        image = Image.open(file_path)
+        custom_config = "--oem 3 --psm 6 -l eng"
+        text = pytesseract.image_to_string(image, config=custom_config)
+        return text.strip()
+    except Exception:
+        return ""
+    finally:
+        signal.alarm(0)
 
-def compress_image_to_under_100kb(image: Image.Image) -> Image.Image:
-    quality = 85
-    while quality > 10:
-        buffer = io.BytesIO()
-        image.save(buffer, format='JPEG', quality=quality, optimize=True)
-        size_kb = buffer.tell() / 1024
-        if size_kb <= 100:
-            buffer.seek(0)
-            return Image.open(buffer)
-        quality -= 5
-    raise Exception("Cannot compress image under 100 KB without losing quality.")
+def contains_thai(text: str) -> bool:
+    return bool(re.search(r'[\u0E00-\u0E7F]', text))
 
-# def extract_text_from_image(file_path: str) -> str:
-#     signal.signal(signal.SIGALRM, timeout_handler)
-#     signal.alarm(180)
-#     try:
-#         image = Image.open(file_path).convert("L")
-
-#         MAX_WIDTH = 250
-#         MAX_HEIGHT = 300
-#         width_ratio = MAX_WIDTH / float(image.width)
-#         height_ratio = MAX_HEIGHT / float(image.height)
-#         scale_ratio = min(width_ratio, height_ratio)
-
-#         if scale_ratio < 1.0:
-#             new_width = int(float(image.width) * scale_ratio)
-#             new_height = int(float(image.height) * scale_ratio)
-#             image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
-
-#         image = image.point(lambda x: 0 if x < 140 else 255, '1')
-
-#         if os.path.getsize(file_path) > 100 * 1024:
-#             image = compress_image_to_under_100kb(image)
-
-#         custom_config = "--oem 3 --psm 6 -l eng+tha"
-#         return pytesseract.image_to_string(image, config=custom_config)
-
-#     except TimeoutException:
-#         return "OCR timed out. Try a smaller or clearer image."
-#     except Exception as e:
-#         return f"OCR failed: {str(e)}"
-#     finally:
-#         signal.alarm(0)
-
-# def extract_text_from_image(file_path: str) -> str:
-#     signal.signal(signal.SIGALRM, timeout_handler)
-#     signal.alarm(180)
-#     try:
-#         image = Image.open(file_path).convert("L")
-
-#         MAX_WIDTH = 300
-#         if image.width > MAX_WIDTH:
-#             ratio = MAX_WIDTH / float(image.width)
-#             height = int((float(image.height) * float(ratio)))
-#             image = image.resize((MAX_WIDTH, height), Image.Resampling.LANCZOS)
-        
-#         image = image.point(lambda x: 0 if x < 140 else 255, '1')
-
-#         if os.path.getsize(file_path) > 100 * 1024:
-#             image = compress_image_to_under_100kb(image)
-        
-#         custom_config = "--oem 3 --psm 6 -l eng+tha"
-#         return pytesseract.image_to_string(image, config=custom_config)
-#     except TimeoutException:
-#         return "OCR timed out. Try a smaller or clearer image."
-#     except Exception as e:
-#         return f"OCR failed: {str(e)}"
-#     finally:
-#         signal.alarm(0)
-
-ocr_model = PaddleOCR(use_angle_cls=True, lang='en')  # Use lang='en' for English only, or 'en' + 'th' for Thai+English
+def count_valid_words(text: str) -> int:
+    words = re.findall(r'\b\w+\b', text)
+    return len(words)
 
 def extract_text_from_image(file_path: str) -> str:
-    try:
-        ocr = PaddleOCR(use_angle_cls=True, lang='en')  # 'en' includes Thai by default
-        result = ocr.ocr(file_path, cls=True)
-
-        lines = []
-        for block in result:
-            for line in block:
-                text = line[1][0]
-                lines.append(text)
-
-        return "\n".join(lines)
-    except Exception as e:
-        return f"PaddleOCR failed: {str(e)}"
+    easy_text, easy_conf = extract_easyocr_text(file_path)
+    if contains_thai(easy_text):
+        return easy_text
+    tesseract_text = extract_tesseract_text(file_path)
+    return tesseract_text if count_valid_words(tesseract_text) > count_valid_words(easy_text) else easy_text
 
 def extract_text(file_path: str) -> str:
     ext = os.path.splitext(file_path)[-1].lower()
     if ext == ".pdf":
-        loader = PyPDFLoader(file_path)
-        docs = loader.load()
-        return "\n".join([doc.page_content for doc in docs])
+        return extract_text_from_pdf(file_path)
     elif ext == ".docx":
         return extract_text_from_docx(file_path)
     elif ext == ".txt":
@@ -205,5 +155,4 @@ def parse_resume(file_path: str) -> Resume:
     resume_text = extract_text(file_path)
     prompt = prompt_template.invoke({"resume_text": resume_text})
     result = model.invoke(prompt)
-    # result = model.invoke(prompt, config={"max_tokens": 500})
     return result, resume_text
