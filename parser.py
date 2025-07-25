@@ -165,13 +165,44 @@ def count_valid_words(text: str) -> int:
     
 #     return tesseract_text if tess_count > easy_count else easy_text
 
-def extract_text_from_image(file_path: str) -> str:
-    # print(f"[Image] Running EasyOCR on image: {file_path}")
-    # text, confidence = extract_easyocr_text(file_path)
-    # print(f"[Image] Using EasyOCR result with confidence: {confidence:.2f}")
+def smart_resize_image(path: str):
+    try:
+        img = Image.open(path)
+        img = img.convert("RGB")
+        width, height = img.size
 
-    print(f"[Image] Running Tesseract OCR pipeline for: {file_path}")
-    text = extract_tesseract_text(file_path)
+        if height > width:
+            # Portrait: resize only if height > 1200
+            if height <= 1200:
+                print(f"[Resize] No resizing needed (height={height} <= 1200)")
+                return
+            new_height = 1200
+            scale_factor = new_height / height
+            new_width = int(width * scale_factor)
+        else:
+            # Landscape or square: resize only if width > 1000
+            if width <= 1000:
+                print(f"[Resize] No resizing needed (width={width} <= 1000)")
+                return
+            new_width = 1000
+            scale_factor = new_width / width
+            new_height = int(height * scale_factor)
+
+        resized_img = img.resize((new_width, new_height), Image.LANCZOS)
+        resized_img.save(path, quality=80, optimize=True)
+        print(f"[Resize] Resized to {new_width}x{new_height}")
+    except Exception as e:
+        print(f"[Resize] Failed to resize image: {e}")
+
+
+def extract_text_from_image(file_path: str) -> str:
+    smart_resize_image(file_path)
+    print(f"[Image] Running EasyOCR on image: {file_path}")
+    text, confidence = extract_easyocr_text(file_path)
+    print(f"[Image] Using EasyOCR result with confidence: {confidence:.2f}")
+
+    # print(f"[Image] Running Tesseract OCR pipeline for: {file_path}")
+    # text = extract_tesseract_text(file_path)
     return text
 
 
