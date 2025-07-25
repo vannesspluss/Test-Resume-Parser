@@ -13,7 +13,7 @@ from langchain.output_parsers import PydanticOutputParser
 from langchain.chat_models import init_chat_model
 from langchain_community.document_loaders import PyPDFLoader
 
-# Pydantic Models
+
 class PersonalInformation(BaseModel):
     firstNameEN: str
     lastNameEN: str
@@ -69,6 +69,7 @@ class Resume(BaseModel):
     educations: Optional[List[Education]]
     certificates: Optional[List[Certificate]]
 
+
 resume_template = """
 You are an AI assistant tasked with extracting structured information from a technical resume.
 Only extract the information that is present in the Resume class.
@@ -78,6 +79,7 @@ Resume Detail:
 """
 
 parser = PydanticOutputParser(pydantic_object=Resume)
+
 prompt_template = PromptTemplate(
     template=resume_template,
     input_variables=['resume_text']
@@ -85,41 +87,55 @@ prompt_template = PromptTemplate(
 
 model = init_chat_model(model='gpt-4o-mini', model_provider='openai').with_structured_output(Resume)
 
-# OCR and File Extraction
+
 class TimeoutException(Exception): pass
 
 def timeout_handler(signum, frame):
     raise TimeoutException()
 
 def extract_text_from_pdf(file_path: str) -> str:
+    print(f"[PDF] Extracting text from PDF: {file_path}")
     loader = PyPDFLoader(file_path)
     docs = loader.load()
-    return "\n".join([doc.page_content for doc in docs])
+    combined_text = "\n".join([doc.page_content for doc in docs])
+    print(f"[PDF] Extracted {len(combined_text)} characters from PDF.")
+    return combined_text
 
 def extract_text_from_docx(file_path: str) -> str:
+    print(f"[DOCX] Extracting text from DOCX: {file_path}")
     doc = Document(file_path)
-    return "\n".join([para.text for para in doc.paragraphs])
+    text = "\n".join([para.text for para in doc.paragraphs])
+    print(f"[DOCX] Extracted {len(text)} characters from DOCX.")
+    return text
 
 def extract_text_from_txt(file_path: str) -> str:
+    print(f"[TXT] Reading plain text file: {file_path}")
     with open(file_path, "r", encoding="utf-8") as f:
-        return f.read()
+        text = f.read()
+        print(f"[TXT] Read {len(text)} characters.")
+        return text
 
 def extract_easyocr_text(file_path: str):
+    print(f"[EasyOCR] Running EasyOCR on image: {file_path}")
     reader = easyocr.Reader(['en', 'th'], gpu=False)
     results = reader.readtext(file_path)
     text = " ".join([res[1] for res in results])
     avg_conf = sum([res[2] for res in results]) / len(results) if results else 0
+    print(f"[EasyOCR] Extracted {len(results)} elements with average confidence: {avg_conf:.2f}")
     return text, avg_conf
 
 def extract_tesseract_text(file_path: str, timeout=180):
+    print(f"[Tesseract] Running Tesseract on image: {file_path}")
     signal.signal(signal.SIGALRM, timeout_handler)
     signal.alarm(timeout)
     try:
         image = Image.open(file_path)
         custom_config = "--oem 3 --psm 6 -l eng"
         text = pytesseract.image_to_string(image, config=custom_config)
+        print(f"[Tesseract] Extracted {len(text)} characters.")
         return text.strip()
-    except Exception:
+    except Exception as e:
+        print(f"[Tesseract] Error: {e}")
         return ""
     finally:
         signal.alarm(0)
@@ -132,14 +148,26 @@ def count_valid_words(text: str) -> int:
     return len(words)
 
 def extract_text_from_image(file_path: str) -> str:
+    print(f"[Image] Starting OCR pipeline for: {file_path}")
     easy_text, easy_conf = extract_easyocr_text(file_path)
+
     if contains_thai(easy_text):
+        print("[Image] Thai text detected in EasyOCR output. Using EasyOCR result.")
         return easy_text
+
     tesseract_text = extract_tesseract_text(file_path)
-    return tesseract_text if count_valid_words(tesseract_text) > count_valid_words(easy_text) else easy_text
+    easy_count = count_valid_words(easy_text)
+    tess_count = count_valid_words(tesseract_text)
+
+    print(f"[Image] Word count — EasyOCR: {easy_count}, Tesseract: {tess_count}")
+    chosen = "Tesseract" if tess_count > easy_count else "EasyOCR"
+    print(f"[Image] Using {chosen} result.")
+    
+    return tesseract_text if tess_count > easy_count else easy_text
 
 def extract_text(file_path: str) -> str:
     ext = os.path.splitext(file_path)[-1].lower()
+    print(f"[Main] Extracting text from: {file_path} (extension: {ext})")
     if ext == ".pdf":
         return extract_text_from_pdf(file_path)
     elif ext == ".docx":
@@ -152,7 +180,9 @@ def extract_text(file_path: str) -> str:
         raise ValueError(f"Unsupported file format: {ext}")
 
 def parse_resume(file_path: str) -> Resume:
+    print(f"[Parse] Parsing resume: {file_path}")
     resume_text = extract_text(file_path)
     prompt = prompt_template.invoke({"resume_text": resume_text})
     result = model.invoke(prompt)
+    print("[Parse] Resume parsing complete.")
     return result, resume_text
